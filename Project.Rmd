@@ -1,0 +1,553 @@
+---
+title: "Credit Card Fraud Detection with Multiple Correspondence Analysis and Linear Discriminant"
+author: "Quan Tran"
+date: "April 2024"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+  html_document: default
+urlcolor: blue
+linkcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+library(ca)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(caTools)
+library(ggpubr)
+library(ggcorrplot)
+library(stats)
+library(corrplot)
+library(reshape2)
+library(dplyr)
+library(tseries)
+library(FactoMineR)
+library(factoextra)
+library(MASS)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+card <- read.csv2("card_transdata.csv", header=TRUE, sep=",")
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+data_extract <- sample.split(card$fraud, SplitRatio = 0.3/100)
+card_extracted <- subset(card, data_extract == TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Loop over columns using names
+for (i in 1:ncol(card_extracted)) {
+  card_extracted[, i] <- as.numeric(as.character(card_extracted[, i]))
+}
+card_extracted$fraud <- factor(card_extracted$fraud, levels = c(0, 1))
+
+```
+
+
+\newpage
+
+# Introduction
+
+In the era of digital banking and e-commerce, credit card fraud has emerged as a significant global concern, impacting millions of consumers and businesses annually. The sophistication of fraudulent techniques has evolved, leveraging technology to exploit weaknesses in financial systems. Consequently, there is an urgent need for more advanced detection methods that can adapt to and anticipate the evolving tactics employed by fraudsters.
+
+## Research question and Motivation 
+
+This project is dedicated to developing a robust credit card fraud detection model using multivariate statistical methods. Our aim is to significantly reduce the incidence of fraud by improving the accuracy of fraud detection, thus minimizing financial losses and preserving consumer trust in credit and debit card transactions. By analyzing patterns and anomalies in transaction data, our system will not only identify existing fraudulent activities but also predict and prevent potential fraud scenarios before they occur.
+
+## Methodologies
+
+The analysis involved using a range of statistical methods and techniques to detect fraud in the credit card transaction data. Summary statistics such as mean, median, and standard deviation were calculated, and Pearson's correlation coefficient and Chi-square tests were used to identify dependencies and multi-collinearity. Various graphs and charts such as histograms, stacked-bar charts, and QQ plots were used to communicate the findings. Multiple Correspondence Analysis and Linear Discriminant Analysis methods were adopted due to its suitability. Justification for the use of these methods can be found under the section [Method Selections](#{Multivariate Analysis}).
+
+## Outline
+
+The project will focus on several key objectives:
+
+1. **Data set Description**: Describe of the data set to understand the meaning of the columns. 
+
+2. **Univariate analysis**: Explore each variable in a data set separately with summary statistics and visualization. 
+
+2. **Bivariate Analysis**: Explore the bivariate dependencies of the columns in the data set, augmented with visualization.
+
+3. **Multivariate analysis**:   
+
+    - Justify for selection of the multivariate statistical methods.
+    
+    - Technical implementation of the method with R.
+    
+    - Results of the model.
+
+4. **Critical evaluations**: Cevaet and report about possible sources of biases.
+
+5. **Conclusion**
+
+You can find the complete repository for the project [here]()
+
+# Data and Analysis Problem
+
+## Dataset and Data Preprocessing
+
+The Credit Card Fraud was obtained from the [Kaggle website](https://www.kaggle.com/datasets/dhanushnarayananr/credit-card-fraud/data). The data set is sourced by some anonymous institute. It contains data 80 explanatory variables and 1 response variable, which is the classification whether a transaction is fraudulent for 1.000.000 transaction.
+
+Finally, we extract only 3000 rows for training and validating with cross validation. While the training set is used for the explanatory data analysis and modeling, the test set is utilized for accuracy testing purposes.
+
+```{r echo=FALSE, out.width='100%', out.length='100%', fig.align='center'}
+knitr::include_graphics('resources/dataset_description.png')
+```
+
+## Univariate Analysis
+
+### Summary Statistics
+
+First of all, we will carry out some basic summary statistics calculations for every column in the data set.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, comment=""} 
+# Summary statistics for each column
+summary(card_extracted)
+```
+
+### Distribution Visualization
+
+Plotting the histograms for the features that correspond to the response variable from the training dataset, we can gain insights into the distribution of the predictors and possible correlations between the explanatory variables and the response variable.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+fraud_repeat_retailer_plot <- ggplot(card_extracted, aes(x = repeat_retailer, fill = as.factor(fraud))) +
+  geom_bar() +
+    scale_fill_manual(values = c("1" = "red", "0" = "cyan")) +
+  labs(title = "Retailer Repetition by Fraud", 
+       x = "Retailer repetition", 
+       fill = "Fraud") +
+  theme_minimal() +
+  theme(axis.text=element_text(size=26.5),
+        axis.title=element_text(size=34.5),
+        title = element_text(size=28.5), legend.text=element_text(size=33.5), legend.title=element_text(size=33.5))
+
+used_chip_plot <- ggplot(card_extracted, aes(x = used_chip, fill = as.factor(fraud))) +  geom_bar() +
+  scale_fill_manual(values = c("1" = "red", "0" = "cyan"))+
+  labs(title = "Used Chip Indicator by Fraud", 
+       x = "Used Chip Indicator", 
+       fill = "Fraud") +
+  theme_minimal() + guides(fill="none") + 
+  theme(axis.text=element_text(size=17),
+        axis.title=element_text(size=34.5),
+        title = element_text(size=24.5))
+
+used_pin_number_plot <- ggplot(card_extracted, aes(x = used_pin_number, fill = as.factor(fraud))) +  geom_bar() +
+  scale_fill_manual(values = c("1" = "red", "0" = "cyan")) +
+  labs(title = "Used Pin Number Indicator by Fraud", 
+       x = "Used Pin Number Indicator", 
+       fill = "Fraud") +
+  theme_minimal() + guides(fill="none") + 
+  theme(axis.text=element_text(size=17),
+        axis.title=element_text(size=34.5),
+        title = element_text(size=24.5))
+
+online_order_plot <- ggplot(card_extracted, aes(x = online_order, fill = as.factor(fraud))) +  geom_bar() +
+  scale_fill_manual(values = c("1" = "red", "0" = "cyan")) +
+  labs(title = "Online Order Indicator by Fraud", 
+       x = "Online Order Indicator", 
+       fill = "Fraud") +
+  theme_minimal() + guides(fill="none") + 
+  theme(axis.text=element_text(size=17),
+        axis.title=element_text(size=34.5),
+        title = element_text(size=24.5))
+
+fraud_plot <- ggplot(card_extracted, aes(x = as.factor(fraud))) +
+  geom_bar() +
+  labs(title = "Fraud Distribution", 
+       x = "Indicator") +
+  theme_minimal() +
+  theme(axis.text=element_text(size=26.5),
+        axis.title=element_text(size=34.5),
+        title = element_text(size=28.5), legend.text=element_text(size=33.5), legend.title=element_text(size=33.5))
+```
+
+```{r, fig.align='center', fig.height=13, fig.width=35, echo=FALSE, message=FALSE, warning=FALSE}
+ggarrange(fraud_plot, ncol=1, common.legend=TRUE)
+ggarrange(fraud_repeat_retailer_plot, used_chip_plot, ncol=2, common.legend = TRUE)
+ggarrange(used_pin_number_plot, online_order_plot, ncol=2)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Create a histogram with a density plot overlay
+home_distance_combined_plot <- ggplot(card_extracted, aes(x = distance_from_home)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "gray", color = "black", alpha = 0.3) +
+  labs(x = "Distance from Home",
+       y = "Density") +
+  theme_minimal() + 
+  theme(axis.text=element_text(size=26.5),
+        axis.title=element_text(size=34.5),
+        title = element_text(size=28.5))
+
+
+transaction_distance_combined_plot <- ggplot(card_extracted, aes(x = distance_from_last_transaction)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "gray", color = "black", alpha = 0.3) +
+  labs(x = "Distance from Last Transaction",
+       y = "Density") +
+  theme_minimal() + 
+  theme(axis.text=element_text(size=26.5),
+        axis.title=element_text(size=34.5),
+        title = element_text(size=28.5))
+
+
+ratio_to_median_plot <- ggplot(card_extracted, aes(x = ratio_to_median_purchase_price)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "gray", color = "black", alpha = 0.3) +
+  labs(x = "Ratio to Median Purchase Price",
+       y = "Density") +
+  theme_minimal() + 
+  theme(axis.text=element_text(size=26.5),
+        axis.title=element_text(size=34.5),
+        title = element_text(size=28.5))
+
+```
+
+```{r, fig.align='center', echo=FALSE, fig.height=13, fig.width=35, message=FALSE, warning=FALSE}
+ggarrange(home_distance_combined_plot, transaction_distance_combined_plot, ratio_to_median_plot, ncol=3, nrow = 1)
+```
+
+### Normality Test
+
+LDA assumes that the predictor variables for each class come from a multivariate normal distribution. This means that each class's predictor variables should roughly form a bell-shaped curve in a multidimensional space (where dimensions are equal to the number of predictors).In this part, we will plot QQ Plots to check for evidence of non-normality.
+
+```{r, fig.align='center', fig.height=5, fig.width=10, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Generate a QQ plot using ggplot2
+distance_home_qq <- ggplot(card_extracted, aes(sample = distance_from_home)) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  labs(title = "QQ Plot of Distance from Home",
+       x = "Theoretical Quantiles",
+       y = "Sample Quantiles") +
+  theme_minimal()
+
+distance_transaction_qq <- ggplot(card_extracted, aes(sample = distance_from_last_transaction)) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  labs(title = "QQ Plot of Distance from last transaction",
+       x = "Theoretical Quantiles") +
+  theme_minimal()
+
+ratio_qq <- ggplot(card_extracted, aes(sample = ratio_to_median_purchase_price)) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  labs(title = "QQ Plot of Ratio to Median Purchase Price",
+       x = "Theoretical Quantiles") +
+  theme_minimal()
+```
+
+```{r, fig.align='center', fig.height=5, fig.width=20, echo=FALSE, message=FALSE, warning=FALSE}
+ggarrange(distance_home_qq, distance_transaction_qq, ratio_qq, ncol=3, nrow = 1)
+```
+
+As notice from the plots, all three predictors are all right-skewed. However, normality can be achieved with log transformation since these columns are all positive.
+
+```{r, fig.align='center', fig.height=5, fig.width=10, echo=FALSE, message=FALSE, warning=FALSE}
+# Generate a QQ plot using ggplot2
+log_distance_home_qq <- ggplot(card_extracted, aes(sample = log(distance_from_home))) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  labs(title = "QQ Plot of Log Distance from Home",
+       x = "Theoretical Quantiles",
+       y = "Sample Quantiles") +
+  theme_minimal()
+
+log_distance_transaction_qq <- ggplot(card_extracted, aes(sample = log(distance_from_last_transaction))) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  labs(title = "QQ Plot of Log Distance from Last Transaction",
+       x = "Theoretical Quantiles") +
+  theme_minimal()
+
+log_ratio_qq <- ggplot(card_extracted, aes(sample = log(ratio_to_median_purchase_price))) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  labs(title = "QQ Plot of Log Ratio to Median Purchase Price",
+       x = "Theoretical Quantiles") +
+  theme_minimal()
+```
+
+```{r, fig.align='center', fig.height=5, fig.width=20, echo=FALSE, message=FALSE, warning=FALSE}
+ggarrange(log_distance_home_qq, log_distance_transaction_qq, log_ratio_qq, ncol=3, nrow = 1)
+```
+
+From the plots, it is safe to conclude that `Log Distance From Home`, `Log Distance from Last Transaction`, and `Log Ratio to Median Purchase Price` are all normally distributed since most of the points from each of the distribution lie on the lines.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+card_extracted$distance_from_home = log(card_extracted$distance_from_home)
+card_extracted$distance_from_last_transaction = log(card_extracted$distance_from_last_transaction)
+card_extracted$ratio_to_median_purchase_price = log(card_extracted$ratio_to_median_purchase_price)
+
+card_extracted <- card_extracted %>%
+  rename("log_distance_from_home" = "distance_from_home", 
+         "log_distance_from_last_transaction" = "distance_from_last_transaction",
+         "log_ratio_to_median_purchase_price" = "ratio_to_median_purchase_price"
+         )
+```
+
+
+## Bivariate Analysis
+
+### Scatter plots visualization 
+
+LDA assumes relatively low multicollinearity among predictors. High multicollinearity might exaggerate the estimated relationships among variables, affecting the stability of the coefficient estimates. Therefore, it is worth to check whether there are dependencies among the predictors.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+pairs(card_extracted[, 1:3], pch = c(16,17)[card_extracted$fraud], gap=0, upper.panel = NULL, col=c(rgb(0, 0, 1, 0.5), rgb(1, 0, 0, 0.5))[card_extracted$fraud])
+par(xpd=TRUE)
+legend(0.75, 0.75, legend = levels(card_extracted$fraud), pch = c(16, 17), col = c(rgb(0, 0, 1, 0.5), rgb(1, 0, 0, 0.5)), cex = 1)
+```
+
+### Pearson's correlation coefficients
+
+From the scatter plots, we can conclude that there are no correlations between the continuous variables `Log Distance From Home`, `Log Distance from Last Transaction`, and `Log Ratio to Median Purchase Price`. However, we can calculate the Pearson's correlation to confirm the uncorrelations.
+
+```{r, fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, out.width='55%', out.length='80%'}
+# Selecting only the numerical variables and the response variable
+
+numeric_data <- card_extracted[, 1:3]
+
+# Calculate the correlation matrix
+correlation_matrix <- cor(numeric_data)
+
+# We will use 'melt' from reshape2 to transform the data for ggplot
+melted_correlation <- melt(correlation_matrix)
+
+# Plotting the heatmap with labels
+ggplot(melted_correlation, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.2f", value)), color = "black", size = 3) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Pearson\nCorrelation") +
+  theme_minimal() +
+  coord_fixed() +
+  labs(x = "", y = "", title = "Correlation Heatmap of Numerical Variables with
+       Risk Flag") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        axis.text.y = element_text(angle = 45, vjust = 1, hjust=1))
+
+```
+
+As depicted in the heatmap, the correlations among the continuous predictors are approximately zero.
+
+### Chi-square tests
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Define a list to store the results
+chi_square_results <- list()
+
+# Expanded list of categorical predictors
+categorical_predictors <- c("repeat_retailer", "used_chip", "used_pin_number", "online_order", "fraud")
+
+# Loop through each pair of predictors and perform the Chi-square test
+for (i in 1:length(categorical_predictors)) {
+    if (i != length(categorical_predictors)) {
+      for (j in (i + 1):length(categorical_predictors)) {
+          # Create contingency table for the pair of predictors
+          contingency_table <- table(card_extracted[[categorical_predictors[i]]], card_extracted[[categorical_predictors[j]]])
+          
+          # Perform the Chi-square test
+          test_result <- chisq.test(contingency_table)
+          
+          # Store the result with a unique key for each pair
+          pair_name <- paste(categorical_predictors[i], "vs", categorical_predictors[j])
+          chi_square_results[[pair_name]] <- (test_result$p.value)
+      }
+    }
+}
+
+# Convert results to a data frame for easy viewing
+chi_square_results_df <- data.frame(Pair = names(chi_square_results), P_Value = unlist(chi_square_results))
+
+# Add a new column 'Reject_Null' to the data frame
+chi_square_results_df$Reject_Null <- chi_square_results_df$P_Value < 0.05
+
+# Output the results
+print(chi_square_results_df)
+
+```
+
+```{r echo=FALSE, out.width='100%', out.length='100%', fig.align='center'}
+knitr::include_graphics('resources/chi-square.png')
+```
+
+From the result table, we conclude that each of the pairs `used_pin_number and fraud` and `online_order and fraud` do not show a statistically significant association with the response variable with each other.
+
+## Multivariate Analysis
+
+### Method Selections
+
+Two multivariate statistical methods will be used in this projects: Multiple Correspondence Analysis and Linear Discriminant Analysis.
+
+LDA is fundamentally a method for classification. It seeks to find a linear combination of features that characterizes or separates two or more classes of objects or events. The goal in credit card fraud detection is to distinguish between fraudulent and non-fraudulent transactions, making LDA an appropriate choice. Furthermore, LDA works by maximizing the ratio of between-class variance to the within-class variance in any particular data set, ensuring that the classes are as distinguishable as possible. Moreover, LDA is also generally less computationally intensive compared to methods like logistic regression or decision trees when the primary goal is binary classification. This makes it an efficient choice given the large volume of transactions.
+
+On the other hand, as LDA assumes the input dataset has a Gaussian distribution, we have to use MCA to transform set of binary variables into a smaller number of principal components (PCs). These components are continuous scores that represent the underlying patterns in the binary data.
+
+### MCA
+
+After carrying out the Multiple Correspondence Analysis, we plot the MCA biplot to see the actractions/repulsions among the categories.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+card_extracted$repeat_retailer <- as.factor(card_extracted$repeat_retailer)
+card_extracted$used_chip <- as.factor(card_extracted$used_chip)
+card_extracted$used_pin_number <- as.factor(card_extracted$used_pin_number)
+card_extracted$online_order <- as.factor(card_extracted$online_order)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Conducting MCA
+mca_results <- MCA(card_extracted[, c("repeat_retailer", "used_chip", "used_pin_number", "online_order")], graph = FALSE)
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', out.width='65%', out.length='80%'}
+# Assuming 'mca_results' is your MCA object from FactoMineR
+fviz_mca_biplot(mca_results,
+                geom = c("point", "text", "arrow"),  # Add points, labels, and arrows
+                label = "all",                       # Label both individuals and variable categories
+                repel = TRUE,                        # Avoid text overlapping
+                arrow.type = "norm",                 # Use normalized arrows
+                col.ind = "blue",                    # Color for individuals
+                col.var = "red",                     # Color for variable categories
+                ggtheme = theme_minimal(),           # Use a minimalistic theme
+                theme = list(text = element_text(size = 12), # Customize text size
+                             axis.title = element_text(size = 14)),
+               invisible = "ind")  # Customize axis title size
+
+```
+We get interpretation for this biplot:
+
+- angle between modalities less than 90 degrees = attraction,
+
+- angle between modalities more than 90 degrees = repulsion and
+
+- angle between modalities 90 degrees = independent.
+
+Then we use the all four resulted principal components as predictors for the LDA.
+
+### LDA
+
+Before moving on with LDA, we standardize the continuous predictors to satisfy the Homogeneity of Variances and Covariances assumption of it.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+card_extracted$log_distance_from_home <- scale(card_extracted$log_distance_from_home)[,1]
+card_extracted$log_distance_from_last_transaction <- scale(card_extracted$log_distance_from_last_transaction)[,1]
+card_extracted$log_ratio_to_median_purchase_price <- scale(card_extracted$log_ratio_to_median_purchase_price)[,1]
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+card_extracted$PC1 <- mca_results$svd$U[,1]
+card_extracted$PC2 <- mca_results$svd$U[,2]
+card_extracted$PC3 <- mca_results$svd$U[,3]
+card_extracted$PC4 <- mca_results$svd$U[,4]
+```
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+d_cv <- lda(fraud ~ log_distance_from_home + log_distance_from_last_transaction + log_ratio_to_median_purchase_price + PC1 + PC2 + PC3 + PC4, data = card_extracted, CV = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE,comment=""}
+result <- data.frame(est = d_cv$class, truth = card_extracted$fraud)
+```
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE,comment=""}
+confusion_matrix <- function(matrix) {
+  true_neg_count <- matrix[1]
+  false_pos_count <- matrix[2]
+  false_neg_count <- matrix[3]
+  true_pos_count <- matrix[4]
+  
+  matrix(c(true_neg_count, false_pos_count, 
+           false_neg_count, true_pos_count), 
+         nrow=2, 
+         dimnames=list(c("Predicted False", "Predicted True"), 
+                       c("Actual False", "Actual True")))
+}
+```
+
+The predictions are then compared to the true labels to compute the number of True Positive (TP), False Positive (FP), True Negative (NG), False Negative (NG).
+
+```{r, echo=FALSE, comment="", fig.align='center'}
+#Create a confusion matrix
+conf_matrix_model <- confusion_matrix(table(result))
+cat("Confusion Matrix: \n")
+conf_matrix_model
+```
+
+Then we will evaluate the classification accuracy of both models using some of the common metrics: Accuracy, Precision, Recall, and F1 Score.
+
+-   **Accuracy**: Accuracy measures how often a classifier makes the correct prediction. It is the ratio of the number of correct predictions to the total number of predictions.
+
+-   **Precision**: Precision is the ratio of correctly predicted positive observations to the total predicted positive observations. It's a measure of a classifier's exactness. High precision relates to a low rate of false positives, and it is particularly important in cases where the cost of a false positive is high.
+
+-   **Specificity**:  Specificity measures the proportion of actual negatives that are correctly identified as such (e.g., the percentage of non-creditworthy individuals who are correctly identified by the model).
+
+-   **Recall (or Sensitivity)**: Recall is the ratio of correctly predicted positive observations to all observations in the actual class. It's a measure of a classifier's completeness. High recall relates to a low rate of false negatives, and it is important in cases where the cost of a false negative is high.
+
+-   **F1 Score**: The F1 Score is the weighted average of Precision and Recall. It's a measure of a test's accuracy and considers both the precision and the recall. This is useful when seeking a balance between Precision and Recall, especially if there is an uneven class distribution.
+
+```{r, echo=FALSE, comment="", fig.align='center'}
+predictive_metrics <- function(conf_matrix) {
+  
+  true_positives  <- conf_matrix[2, 2]
+  true_negatives  <- conf_matrix[1, 1]
+  false_positives <- conf_matrix[2, 1]
+  false_negatives <- conf_matrix[1, 2]
+  
+  accuracy <- (true_positives + true_negatives) / sum(conf_matrix)
+  precision <- true_positives / (true_positives + false_positives)
+  specificity <- true_negatives / (true_negatives + false_positives)
+  recall <- true_positives / (true_positives + false_negatives)
+  f1_score<- 2 * (precision * recall) / (precision + recall)
+  
+  cat(sprintf("Accuracy:    %.2f\nPrecision:   %.2f\nSpecificity: %.2f\nRecall:      %.2f\nF1 Score:    %.2f\n\n\n", 
+      accuracy, precision, specificity, recall, f1_score))
+}
+
+predictive_metrics(conf_matrix_model)
+```
+The two metrics we would be focus on are Precision and Specificity. Since the cost false positivity is high (the loss of a credit card fraud might be very high), the Precision and Specificity metrics are appropriate since they put emphasis on classifier's exactness. The Precision and Specificity scores of this model are quite high (0.92 and 1.00, respectively), indicating that this model can be deployed for practical use.
+
+To write the critical evaluations and conclusions for your project on credit card fraud detection using multivariate statistical methods, here are the sections carefully crafted to reflect thoughtful insight into the process and outcomes:
+
+## Critical Evaluations
+
+**Possible Sources of Bias and Limitations:**
+
+1. **Unbalanced Dataset:**
+
+   - The dataset significantly leans towards non-fraudulent transactions, which is common in real-world scenarios but can introduce bias towards the majority class. This imbalance affects the training of the model, potentially leading to higher accuracy but poorer precision and recall for the minority class (fraudulent transactions).
+   - **Mitigation Strategy:** Techniques like SMOTE (Synthetic Minority Over-sampling Technique), adjusted class weights, or anomaly detection methods could be considered to address this imbalance.
+
+2. **Assumption of Normality:**
+   - Linear Discriminant Analysis (LDA) assumes that the predictor variables are normally distributed within each class. The analysis highlighted non-normality which was adjusted using log transformations. However, this transformation might not perfectly normalize the data, potentially skewing the LDA results.
+   - **Mitigation Strategy:** Continuous monitoring and validation of the normality assumption through more robust statistical tests or considering non-parametric methods if assumptions are consistently violated.
+
+3. **Model Overfitting:**
+   - Given the complexity of the methods used and the high dimensionality of the data, there is a risk of model overfitting where the model performs well on training data but less so on unseen data.
+
+# Conclusion
+
+This project aimed to develop a robust credit card fraud detection system using a combination of Multiple Correspondence Analysis (MCA) and Linear Discriminant Analysis (LDA). The primary goal was to enhance the detection accuracy and thus reduce the incidence of fraud, safeguarding consumer transactions effectively.
+
+- **Achievements:**
+  - Successfully applied MCA to transform binary variables into principal components used in LDA, ensuring the dataset's suitability for the latter analysis.
+  - The LDA model demonstrated high specificity and precision, indicating strong performance in identifying non-fraudulent transactions accurately and minimizing false positives, which is critical in financial contexts.
+  
+- **Performance Metrics:**
+  - The model achieved a high overall accuracy and specificity, but the recall for fraudulent transactions was relatively low. This suggests that while the model is excellent at identifying legitimate transactions, it still misses a significant number of fraudulent cases.
+  
+- **Future Directions:**
+  - Exploring additional feature engineering techniques and incorporating more diverse data sources to enrich the model's learning capacity.
+
+- **Final Thoughts:**
+  - Despite some limitations, the project establishes a solid foundation for a scalable and effective fraud detection system. Ongoing adjustments and enhancements based on emerging data and fraud techniques will be crucial to maintain and improve the system's efficacy.
