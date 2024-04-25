@@ -96,7 +96,7 @@ You can find the complete repository for the project [here]()
 
 ## Dataset and Data Preprocessing
 
-The Credit Card Fraud was obtained from the [Kaggle website](https://www.kaggle.com/datasets/dhanushnarayananr/credit-card-fraud/data). The data set is sourced by some anonymous institute. It contains data 80 explanatory variables and 1 response variable, which is the classification whether a transaction is fraudulent for 1.000.000 transaction.
+The Credit Card Fraud was obtained from the [Kaggle website](https://www.kaggle.com/datasets/dhanushnarayananr/credit-card-fraud/data). The data set is sourced by some anonymous institute. It contains data 7 explanatory variables and 1 response variable, which is the classification whether a transaction is fraudulent for 1.000.000 transaction.
 
 Finally, we extract only 3000 rows for training and validating with cross validation. While the training set is used for the explanatory data analysis and modeling, the test set is utilized for accuracy testing purposes.
 
@@ -438,11 +438,13 @@ Then we use the all four resulted principal components as predictors for the LDA
 
 Before moving on with LDA, we standardize the continuous predictors to satisfy the Homogeneity of Variances and Covariances assumption of it.
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+```{r, message=FALSE, warning=FALSE, results='hide'}
 card_extracted$log_distance_from_home <- scale(card_extracted$log_distance_from_home)[,1]
 card_extracted$log_distance_from_last_transaction <- scale(card_extracted$log_distance_from_last_transaction)[,1]
 card_extracted$log_ratio_to_median_purchase_price <- scale(card_extracted$log_ratio_to_median_purchase_price)[,1]
 ```
+
+Then we utilize the components from MCA as predictors for the dependent variable.
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
 card_extracted$PC1 <- mca_results$svd$U[,1]
@@ -452,7 +454,9 @@ card_extracted$PC4 <- mca_results$svd$U[,4]
 ```
 
 ```{r, message=FALSE, warning=FALSE, results='hide'}
-d_cv <- lda(fraud ~ log_distance_from_home + log_distance_from_last_transaction + log_ratio_to_median_purchase_price + PC1 + PC2 + PC3 + PC4, data = card_extracted, CV = TRUE)
+d_cv <- lda(fraud ~ log_distance_from_home + log_distance_from_last_transaction 
+            + log_ratio_to_median_purchase_price + PC1 + PC2 + PC3 + PC4, 
+            data = card_extracted, CV = TRUE)
 ```
 
 ```{r, message=FALSE, warning=FALSE,comment=""}
